@@ -6,6 +6,7 @@ import { renderTrendChart } from './chart.js';
 import { esc, fmtInt } from './dom.js';
 import { briefingOutlookHtml, deepMethodsHtml, deepVarHtml, outlookHtml } from './deep.js';
 import { chartTakeaway, explain, glossaryHtml, guideHtml } from './explain.js';
+import { API, liveChartInput, liveHtml } from './live.js';
 
 const GROUPS = [
   { system: 'MERRA-2', note: 'reanalysis model', vars: ['T2M', 'RH2M', 'PRECTOTCORR', 'GWETTOP'] },
@@ -28,7 +29,7 @@ const PAIR_STATE = {
  * detector output and the backend's trend table; nothing is recomputed here
  * except the display chart.
  */
-export function createDossier({ root, core, source, store, onSelectSite }) {
+export function createDossier({ root, core, source, store, onSelectSite, onRadius = () => {} }) {
   let token = 0;
 
   root.addEventListener('click', (e) => {
@@ -36,7 +37,12 @@ export function createDossier({ root, core, source, store, onSelectSite }) {
     if (v) store.set({ focusVar: v.dataset.focus });
     const s = e.target.closest('[data-site]');
     if (s) onSelectSite(Number(s.dataset.site));
-    if (e.target.closest('[data-close]')) store.set({ selectedIndex: null });
+    if (e.target.closest('[data-close]')) store.set({ selectedIndex: null, probe: null, live: null });
+    if (e.target.closest('[data-retry]')) render();
+    const lv = e.target.closest('[data-live-var]');
+    if (lv) store.set({ liveVar: lv.dataset.liveVar });
+    const rb = e.target.closest('[data-radius]');
+    if (rb) onRadius(Number(rb.dataset.radius));
   });
 
   async function render() {
@@ -47,9 +53,27 @@ export function createDossier({ root, core, source, store, onSelectSite }) {
       return;
     }
     const variable = focusVar ?? 'T2M';
-    const [monthly, annual] = await Promise.all([source.monthly(variable), source.annual(variable)]);
+    let monthly;
+    let annual;
+    try {
+      [monthly, annual] = await Promise.all([source.monthly(variable), source.annual(variable)]);
+    } catch (error) {
+      if (mine !== token) return;
+      // Show the problem inside the panel only, with a retry, instead of a full-screen error.
+      root.innerHTML = `<header class="panel-head dossier-head"><h2>Site</h2>
+        <button type="button" class="icon-button" data-close aria-label="Close dossier"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></header>
+        <div class="dossier-body"><p class="live-wait">This place's data didn't download (${esc(error.message)}). Check your internet connection, then
+        <button type="button" class="jump" data-retry>try again</button></p></div>`;
+      return;
+    }
     if (mine !== token) return;
-    root.innerHTML = dossierHtml(core, selectedIndex, variable, store.get().probe);
+    const { probe, live, liveVar } = store.get();
+    root.innerHTML = dossierHtml(core, selectedIndex, variable, probe, live, liveVar);
+    if (live?.status === 'ready') {
+      const input = liveChartInput(live.data, live.data.variables[liveVar] ? liveVar : 'T2M');
+      const slot = root.querySelector('[data-live-chart]');
+      if (input && slot) renderTrendChart(slot, { ...input, accent: '#e6e8eb' });
+    }
     const rec = trendRecord(core, selectedIndex, variable);
     const accent = rec.available ? `rgb(${colorForChange(rec.slope, rec.scale, variable).join(' ')})` : '#e6e8eb';
     renderTrendChart(root.querySelector('[data-chart]'), {
@@ -105,7 +129,7 @@ function countsHtml(c) {
     .join('');
 }
 
-function dossierHtml(core, i, focusVar, probe = null) {
+function dossierHtml(core, i, focusVar, probe = null, live = null, liveVar = 'T2M') {
   const { intel, regions, variables } = core;
   const r = regions[i];
   const site = intel.sites[i];
@@ -161,10 +185,13 @@ function dossierHtml(core, i, focusVar, probe = null) {
     </header>
     <div class="dossier-body">
       ${probe ? `<div class="probe">
-        <p>You ${probe.how === 'click' ? 'clicked' : 'searched for'} <b>${esc(probe.label)}</b>. The nearest place we analysed is <b>${esc(r.name)}</b>,
-        ${probe.km < 5 ? 'right there' : `${fmtInt(probe.km)} km away`}, so the results below are for that 2°×2° area (about 200 km across).</p>
-        ${probe.km > 300 ? '<p class="probe-warn">That is quite far, so treat these results as a rough guide for your spot.</p>' : ''}
+        <p>You ${probe.how === 'click' ? 'clicked' : 'searched for'} <b>${esc(probe.label)}</b>. The nearest place in our 360-site archive is <b>${esc(r.name)}</b>,
+        ${probe.km < 5 ? 'right there' : `${fmtInt(probe.km)} km away`}${API ? '.' : ', so the results below are for that 2°×2° area (about 200 km across).'}</p>
+        ${probe.km > 300 && !API ? '<p class="probe-warn">That is quite far, so treat these results as a rough guide for your spot.</p>' : ''}
+        ${API ? '<p>First: <b>live NASA results for your exact spot</b> (1981–2024). Further down: the full case file for the nearest analysed area.</p>' : ''}
       </div>` : ''}
+      ${probe ? liveHtml(live, core, liveVar) : ''}
+      ${probe && live ? `<h3 class="sub nearest-head">Nearest analysed area: ${esc(r.name)}</h3>` : ''}
       <div class="ident">
         <h3 class="site-title">${esc(r.name)}</h3>
         <p>${esc(r.country ?? '')} · ${esc(r.climate.label)} · ${coordText(r)}</p>

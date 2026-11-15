@@ -31,8 +31,27 @@ export function createTrendDataSource({ baseUrl, fetchJson = defaultFetchJson })
     return core;
   }
 
+  // Retry a couple of times, and never keep a failed download in the cache,
+  // so one network hiccup can't break every later click on that variable.
+  async function withRetry(path, tries = 3) {
+    let last;
+    for (let k = 0; k < tries; k++) {
+      try {
+        return await fetchJson(path);
+      } catch (e) {
+        last = e;
+        await new Promise((r) => setTimeout(r, 400 * (k + 1)));
+      }
+    }
+    throw last;
+  }
+
   function lazy(cache, folder, variable) {
-    if (!cache.has(variable)) cache.set(variable, fetchJson(url(`${folder}/${variable}.json`)));
+    if (!cache.has(variable)) {
+      const p = withRetry(url(`${folder}/${variable}.json`));
+      cache.set(variable, p);
+      p.catch(() => cache.delete(variable));
+    }
     return cache.get(variable);
   }
 

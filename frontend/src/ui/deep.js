@@ -7,9 +7,9 @@ import { esc, fmtInt } from './dom.js';
 import { WORDS, explain } from './explain.js';
 
 const HAZARDS = [
-  { id: 'heat', label: 'Heatwave months', what: 'hotter than the hottest 10% of that month in 2000–2011' },
-  { id: 'drought', label: 'Dry-soil months', what: 'topsoil drier than the driest 10% of that month in 2000–2011' },
-  { id: 'flood', label: 'Very wet months', what: 'rainier than the wettest 10% of that month in 2000–2011' },
+  { id: 'heat', label: 'Heatwave months', what: 'hotter than the hottest 10% of that month in BASE' },
+  { id: 'drought', label: 'Dry-soil months', what: 'topsoil drier than the driest 10% of that month in BASE' },
+  { id: 'flood', label: 'Very wet months', what: 'rainier than the wettest 10% of that month in BASE' },
   { id: 'fire', label: 'Fire-weather months', what: 'hot (top 25%) and dry air (bottom 25%) at the same time' },
 ];
 const VERDICT = {
@@ -22,7 +22,7 @@ const pct = (x) => (x === null || x === undefined ? '–' : x > 0.999 ? '>99.9%'
 const num = (x, d = 1) => (x === null || x === undefined ? '–' : Number(x).toFixed(d));
 
 /** Site-level: hazards, dry spells, aridity, stability. */
-export function outlookHtml(core, i) {
+export function outlookHtml(core, i, { baseline = '2000–2011', head = '2000–11 vs 2012–24', early = 'the early 2000s' } = {}) {
   const s = core.deep?.sites?.[i];
   if (!s) return '';
   const rising = HAZARDS.filter((h) => s.hazards[h.id].verdict === 'rising');
@@ -34,7 +34,7 @@ export function outlookHtml(core, i) {
     const z = s.hazards[h.id];
     const [label, help] = VERDICT[z.verdict];
     return `<li data-risk="${z.verdict}">
-      <div class="hz-name"><span>${h.label}</span><small>${esc(h.what)}</small></div>
+      <div class="hz-name"><span>${h.label}</span><small>${esc(h.what.replace('BASE', baseline))}</small></div>
       <div class="hz-nums">
         <b class="hz-verdict" title="${esc(help)} · odds ×${num(z.ratio, 2)}/decade · p ${formatP(z.p)} · q ${formatP(z.q)}">${label}</b>
         <span>${num(z.before)} → <b>${num(z.after)}</b> a year</span>
@@ -56,11 +56,11 @@ export function outlookHtml(core, i) {
   const up = HAZARDS.map((h) => ({ h, z: s.hazards[h.id] })).filter(({ z }) => z.after > z.before && z.before > 0 && z.verdict !== 'steady')
     .sort((a, b) => b.z.after / b.z.before - a.z.after / a.z.before)[0];
   const plain = up
-    ? `In plain words: ${up.h.label.toLowerCase()} now happen ${up.z.after / up.z.before >= 1.5 ? `about <b>${num(up.z.after / up.z.before, up.z.after / up.z.before >= 3 ? 0 : 1)} times as often</b>` : '<b>a bit more often</b>'} as in the early 2000s
+    ? `In plain words: ${up.h.label.toLowerCase()} now happen ${up.z.after / up.z.before >= 1.5 ? `about <b>${num(up.z.after / up.z.before, up.z.after / up.z.before >= 3 ? 0 : 1)} times as often</b>` : '<b>a bit more often</b>'} as in ${esc(early)}
        (about ${Math.round(up.z.after)} a year instead of ${Math.round(up.z.before)})${up.z.verdict === 'rising' ? ', and that is very unlikely to be luck' : ', but that could still be luck'}.`
     : 'In plain words: extreme months are <b>not</b> becoming clearly more common here.';
   return `<section class="outlook">
-      <h4>Disaster outlook <span>2000–11 vs 2012–24</span></h4>
+      <h4>Disaster outlook <span>${esc(head)}</span></h4>
       <p class="plain">${plain}</p>
       ${explain('outlook')}
       <p class="outlook-lede">${esc(lede)}${watch.length ? ` Worth watching: ${watch.map((h) => h.label.toLowerCase()).join(', ')}.` : ''}</p>
@@ -79,7 +79,11 @@ export function deepVarHtml(core, i, v) {
   const dir = x.slope > 0 ? 'rising' : 'falling';
   const q = x.quantiles ?? {};
   const qv = (k) => (q[k]?.[0] === null || q[k] === undefined ? '–' : `${formatSigned(q[k][0], dec)}${q[k][1] < 0.05 ? '*' : ''}`);
+  const mk = x.mk && x.mk[1] !== null
+    ? ['Mann-Kendall', `${x.mk[1] < 0.05 ? `<b>${x.slope > 0 ? 'Rising' : 'Falling'} trend confirmed</b>` : 'No clear trend'} <small>(τ ${formatSigned(x.mk[0], 2)}, p ${formatP(x.mk[1])}; Sen's slope ${formatSigned(x.sen, dec)} ${esc(unit)}/decade)</small>`]
+    : null;
   const rows = [
+    mk,
     x.sure !== undefined && ['How sure', `<b>${pct(x.sure)}</b> sure it is ${dir} <small>(Bayesian; 95% credible ${formatSigned(x.cred?.[0], dec)} to ${formatSigned(x.cred?.[1], dec)}; Bayes factor ${num(x.bf, x.bf >= 10 ? 0 : 2)}, ${esc(x.evidence)})</small>`],
     x.quantiles && ['Extremes', `low months ${qv('10')} · typical ${qv('50')} · high months ${qv('90')} <small>${esc(unit)}/decade (* p < 0.05, quantile regression)</small>`],
     x.sn !== undefined && ['Normal range', x.emerged ? `Left its 2000s range in <b>${x.emerged}</b> <small>(signal/noise ${num(Math.abs(x.sn), 2)})</small>` : `Still within its 2000s range <small>(signal/noise ${num(Math.abs(x.sn), 2)})</small>`],
@@ -119,7 +123,7 @@ export function briefingOutlookHtml(core) {
 export function deepMethodsHtml(core) {
   const m = core.deep?.methods;
   if (!m) return '';
-  const names = { bayes: 'How sure', extremes: 'Extremes', emergence: 'Normal range', years_needed: 'Not proven yet', hazards: 'Disaster outlook',
+  const names = { mann_kendall: 'Mann-Kendall', bayes: 'How sure', extremes: 'Extremes', emergence: 'Normal range', years_needed: 'Not proven yet', hazards: 'Disaster outlook',
     dry_spells: 'Dry spells', aridity: 'Desertification', stability: 'Stability' };
   return Object.entries(m).map(([k, t]) => `<p><b>${esc(names[k] ?? k)}.</b> ${esc(t)}</p>`).join('');
 }

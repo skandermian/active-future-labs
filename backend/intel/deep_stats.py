@@ -5,6 +5,7 @@ Usage:
 
 Methods no other team in this challenge uses (checked across the 186 public GitHub entries):
   per site x variable
+    mann_kendall Mann-Kendall test and Sen's slope on yearly means (named in the challenge brief)
     bayes        Bayesian trend (Jeffreys prior -> Student-t posterior): probability the direction is real, Bayes factor
     extremes     quantile regression on monthly anomalies: are the 10% lowest / typical / 10% highest months changing differently?
     emergence    signal-to-noise of the smooth (LOWESS) change vs natural year-to-year noise; year it left its normal range
@@ -52,10 +53,11 @@ def load(data_dir: Path):
     return regions, series
 
 
-def yearly(x):
+def yearly(x, start=None):
+    start = START if start is None else start
     m = x.reshape(-1, 12)
     ok = np.isfinite(m).sum(1) == 12
-    years = np.arange(START, START + len(m))[ok]
+    years = np.arange(start, start + len(m))[ok]
     return years.astype(float), m[ok].mean(1)
 
 
@@ -70,15 +72,18 @@ def loglik(res):
 
 
 # ---------------- per site x variable ----------------
-def series_stats(x):
-    t, y = yearly(x)
+def series_stats(x, start=None):
+    """start = first year of x (defaults to the archive start); passed explicitly so the live server is thread-safe."""
+    start = START if start is None else start
+    t, y = yearly(x, start)
     if len(y) < 15 or np.nanstd(y) == 0:
         return None
     n, tc = len(y), t - t.mean()
     ols = stats.linregress(tc, y)
     res = y - (ols.intercept + ols.slope * tc)
     s = np.sqrt(res @ res / (n - 2))
-    out = {'slope': r(ols.slope * 10), 'p': r(ols.pvalue)}
+    tau, p_mk = stats.kendalltau(t, y)                                     # Mann-Kendall (the challenge's suggested test)
+    out = {'slope': r(ols.slope * 10), 'p': r(ols.pvalue), 'mk': [r(tau, 3), r(p_mk)], 'sen': r(stats.theilslopes(y, t).slope * 10)}
     if ols.stderr > 0:                                                    # Bayesian
         post = stats.t(df=n - 2, loc=ols.slope * 10, scale=ols.stderr * 10)
         bf = np.exp(((2 * np.log(n) - 2 * loglik(y - y.mean())) - (3 * np.log(n) - 2 * loglik(res))) / 2)
@@ -87,7 +92,7 @@ def series_stats(x):
     a = month_anoms(x)                                                    # quantile regression
     ok = np.isfinite(a)
     if ok.sum() >= 120:
-        tm = (np.arange(len(a)) / 12 + START + 1 / 24)[ok]
+        tm = (np.arange(len(a)) / 12 + start + 1 / 24)[ok]
         X = sm.add_constant(tm - tm.mean())
         q = {}
         rho = np.clip(np.corrcoef(a[ok][:-1], a[ok][1:])[0, 1], 0, 0.95)   # months remember each other:
@@ -122,7 +127,7 @@ def series_stats(x):
             for _ in range(80):
                 mid = (lo + hi) / 2
                 lo, hi = (lo, mid) if f(lo) * f(mid) <= 0 else (mid, hi)
-            out['sig_by'] = int(START + np.ceil(hi) - 1)
+            out['sig_by'] = int(t[0] + np.ceil(hi) - 1)
     return out
 
 
@@ -212,10 +217,10 @@ def aridity(t2m, rain, lat):
     if good.sum() < 15:
         return None
     ai, yrs = P[good] / E[good], yrs[good]
-    cls = lambda v: next(n for lo, hi, n in ARID if lo <= v < hi)
+    cls = lambda v: next((n for lo, hi, n in ARID if lo <= v < hi), None) if np.isfinite(v) else None
     sen = stats.theilslopes(ai, yrs)
     tau, p = stats.kendalltau(yrs, ai)
-    now, then = ai[yrs >= 2015].mean(), ai[yrs <= 2009].mean()
+    now, then = ai[yrs >= 2015].mean(), ai[yrs <= START + 9].mean()            # first 10 years vs 2015-2024
     icpt = np.median(ai - sen.slope * yrs)
     level = icpt + sen.slope * 2024
     bounds = [0.05, 0.2, 0.5, 0.65]
@@ -300,6 +305,7 @@ def main(data_dir: Path):
                                                 and s['dry_spells']['p'] < 0.05 and s['dry_spells']['p_dd_after'] > s['dry_spells']['p_dd_before'])),
                    'aridity_crossing': int(sum(1 for s in sites if s['aridity'] and s['aridity']['cross']))},
         'methods': {
+            'mann_kendall': 'Mann-Kendall rank test on yearly means (the challenge\'s suggested test) with Sen\'s slope; no assumption about the shape of the data.',
             'bayes': 'Bayesian linear trend on yearly means (Jeffreys prior, Student-t posterior); Bayes factor from BIC.',
             'extremes': 'Quantile regression of deseasonalised monthly values at the 10th, 50th and 90th percentiles; standard errors widened for month-to-month autocorrelation (AR(1) effective sample size).',
             'emergence': 'LOWESS signal relative to the 2000-2009 level, divided by year-to-year noise; emerged when |S/N| > 1 to the end of the record.',

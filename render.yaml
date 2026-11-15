@@ -1,0 +1,12 @@
+# One-click hosting for the live analysis server on Render (free plan).
+# Render dashboard -> New -> Blueprint -> pick this repo. Then copy the service URL
+# (e.g. https://earthwatch-api.onrender.com) into GitHub: Settings -> Secrets and variables
+# -> Actions -> Variables -> New variable API_URL, and re-run the "Deploy frontend" workflow.
+services:
+  - type: web
+    name: earthwatch-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/server/requirements.txt
+    startCommand: uvicorn backend.server.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health

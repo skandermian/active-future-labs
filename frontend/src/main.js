@@ -10,6 +10,8 @@ import '@fontsource/ibm-plex-mono/500.css';
 import './styles/console.css';
 import { createPin, createViewer, flyToPlace, onPick } from './core/viewer.js';
 import { findPlace, nearestSite } from './tools/places.js';
+import { API, fetchLive, warmUp } from './ui/live.js';
+import { createTour } from './ui/tour.js';
 import { createStore } from './core/store.js';
 import { createContextStore } from './core/contextStore.js';
 import { createLayerManager } from './core/layerManager.js';
@@ -62,7 +64,10 @@ async function start() {
     focusVar: variables[hash.get('var')] ? hash.get('var') : null,
     view: initialSite >= 0 ? 'dossier' : 'feed',
     probe: null, // { label, lat, lon, km, how: 'search' | 'click' } when the user picked a spot rather than a site
+    live: null, // { status: 'loading' | 'ready' | 'error', radius, data?, message? } from the Python server
+    liveVar: 'T2M',
   });
+  warmUp();
   const pin = createPin(viewer);
 
   const leadVar = (i) => {
@@ -73,8 +78,22 @@ async function start() {
     }
     return 'T2M';
   };
+  let liveToken = 0;
+  const requestLive = async (probe, radius) => {
+    if (!API || !probe) return;
+    const mine = ++liveToken;
+    store.set({ live: { status: 'loading', radius } });
+    try {
+      const data = await fetchLive({ lat: probe.lat, lon: probe.lon, label: probe.label, radius });
+      if (mine === liveToken) store.set({ live: { status: 'ready', radius, data } });
+    } catch (e) {
+      if (mine === liveToken) store.set({ live: { status: 'error', radius, message: e.message } });
+    }
+  };
   const selectSite = (i, focusVar, probe = null) => {
-    store.set({ selectedIndex: i, focusVar: focusVar ?? leadVar(i), view: 'dossier', probe });
+    liveToken++;
+    store.set({ selectedIndex: i, focusVar: focusVar ?? leadVar(i), view: 'dossier', probe, live: null });
+    if (probe) requestLive(probe, 0);
     if (probe) pin.set(probe.lat, probe.lon, probe.label);
     else pin.hide();
     flyToPlace(viewer, probe ? probe.lon : regions[i].lon, probe ? probe.lat : regions[i].lat, { height: 6_000_000 });
@@ -113,7 +132,7 @@ async function start() {
       selectSite(s.site, s.var && variables[s.var] ? s.var : s.pair?.[0]);
     },
   });
-  const dossier = createDossier({ root: $('dossier'), core, source, store, onSelectSite: (i) => selectSite(i) });
+  const dossier = createDossier({ root: $('dossier'), core, source, store, onSelectSite: (i) => selectSite(i), onRadius: (r) => requestLive(store.get().probe, r) });
 
   for (const b of document.querySelectorAll('.view-tabs [data-view]'))
     b.addEventListener('click', () => store.set({ view: b.dataset.view }));
@@ -137,7 +156,7 @@ async function start() {
       renderHud(core, s);
 
       if (!changed || changed.some((k) => ['filter', 'query', 'selectedIndex'].includes(k))) feed.render();
-      if (!changed || changed.some((k) => ['selectedIndex', 'focusVar', 'probe'].includes(k))) await dossier.render();
+      if (!changed || changed.some((k) => ['selectedIndex', 'focusVar', 'probe', 'live', 'liveVar'].includes(k))) await dossier.render();
 
       const feedState = worstState(layers.stats().filter((l) => l.enabled).map((l) => l.state));
       status.hidden = feedState === 'nominal';
@@ -173,6 +192,33 @@ async function start() {
 
   store.subscribe((_, __, changed) => render(changed));
   await render();
+
+  // ---- guided tour: first visit, and the "Take the tour" button ----
+  const wide = () => window.innerWidth >= 1280;
+  const london = regions.findIndex((r) => r.name === 'London');
+  const tour = createTour({
+    onFinish: () => { try { localStorage.setItem('ew-tour-done', '1'); } catch { /* private mode */ } },
+    steps: [
+      { title: 'Welcome to EARTHWATCH', text: 'NASA has measured the whole planet every month for decades: temperature, rain, soil, haze and more. This site finds where things are <b>really</b> changing, not just one odd year, and what that means for heatwaves, droughts, floods and fires. This tour takes about a minute.', before: () => store.set({ selectedIndex: null, probe: null, live: null, view: 'feed' }) },
+      { title: 'Search anywhere', target: '#place-search', text: `Type any town, country or coordinates, or <b>click anywhere on the globe</b>. ${API ? 'We download 44 years of NASA data for that exact spot and test it live.' : 'We open the nearest of our 360 analysed areas.'}` },
+      { title: 'The globe', target: '#globe', text: 'Each dot is one of 360 analysed areas. <b>Bigger dots = more change.</b> The colour shows the kind of change (see the key at the top). Drag to spin, scroll to zoom.' },
+      { title: 'Five kinds of change', target: '.tally', text: 'The computer looks for five kinds of change: the normal level moving (Drift), weather getting more erratic, NASA records disagreeing (Conflict), and climates that now look like somewhere else (Migrate). <b>Tap one to filter the globe.</b>', before: () => !wide() && store.set({ view: 'feed' }) },
+      { title: 'The signal feed', target: '.signal-list', text: 'Every change found, strongest first. "Confirmed" = very strong evidence or two NASA records agree. Tap any line to open that place.', before: () => !wide() && store.set({ view: 'feed' }) },
+      { title: 'A place\'s case file', target: '#dossier', text: 'Here is London. Each place has a case file: what is changing, how sure we are, and whether the sources agree.', wait: 900, before: () => { if (london >= 0) selectSite(london, 'T2M'); store.set({ view: 'dossier' }); } },
+      { title: 'Disaster outlook', target: '.outlook', text: 'Are heatwaves, dry soil, very wet months or fire weather becoming more common? Each comes with today\'s chance that a month is extreme, plus dry spells, desertification and a stability score out of 100.', wait: 400 },
+      { title: 'Stuck on a word?', target: '.dossier-body .explain summary', text: 'Every section has a <b>What does this mean?</b> button, and there is a word list at the bottom of every case file.' },
+      { title: 'You\'re ready', text: 'Search your own town, or click anywhere on the globe. You can replay this tour any time with <b>Take the tour</b> at the top.' },
+    ],
+  });
+  const tourBtn = document.createElement('button');
+  tourBtn.type = 'button';
+  tourBtn.className = 'tour-button';
+  tourBtn.textContent = 'Take the tour';
+  tourBtn.addEventListener('click', () => tour.start());
+  $('statusbar').append(tourBtn);
+  let seen = false;
+  try { seen = localStorage.getItem('ew-tour-done') === '1'; } catch { /* private mode */ }
+  if (!seen && !location.hash) setTimeout(() => tour.start(), 800);
   if (store.get().selectedIndex !== null) {
     const r = regions[store.get().selectedIndex];
     flyToPlace(viewer, r.lon, r.lat, { height: 6_000_000, duration: 0 });

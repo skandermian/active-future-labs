@@ -34,9 +34,13 @@ const EXPLAIN = {
     <b>Memory</b> = whether each month looks more like the one before (a possible early-warning sign). Bright numbers are proven, after checking all places; grey ones could be luck.`,
   chart: `The thin line shows each month compared with what is normal for that month here (0 = normal). The dots are yearly averages.
     The straight line is the trend, and the shaded fan is how sure we are of it: if the fan is all above or all below 0, the change is real.`,
-  deep: `Extra checks on the chart above. <b>How sure</b>: the chance that it is really going up (or down), not just random weather.
+  deep: `Extra checks on the chart above. <b>Mann-Kendall</b>: a classic test that only asks "do later years tend to be higher (or lower) than earlier ones?", so odd years can't fool it. <b>How sure</b>: the chance that it is really going up (or down), not just random weather.
     <b>Extremes</b>: whether the lowest, typical and highest months are changing at different speeds. <b>Normal range</b>: the year it moved outside its
     usual early-2000s ups and downs. <b>Not proven yet</b>: how long we would need to keep measuring before we could be sure.`,
+  live: `We downloaded NASA's monthly record for the exact spot (or area) you chose, from 1981 to 2024, and ran the same tests as everywhere else.
+    <b>Change /decade</b> = how much it changes every 10 years. <b>Mann-Kendall p</b> = the challenge's suggested test (below 0.05 = a real trend).
+    <b>Significant</b> = two different tests both say it is real. <b>How sure</b> = the chance the direction is right. Soil water, satellite rain and haze can't be
+    downloaded quickly for any spot, so those come from the nearest analysed area (the distance is shown).`,
   analogue: `We compared this place's climate in 2020–24 with every place's climate in 2000–04. The closest match is shown: it is as if this place's climate has "moved".
     Treat it as a clue, not proof: some matches happen by chance.`,
 };
@@ -63,6 +67,9 @@ const GLOSSARY = [
   ['Significant / proven', 'So unlikely to happen by chance that we treat it as real. We use the usual science rule: less than a 1 in 20 chance of being luck.'],
   ['p-value (p)', 'The chance of seeing a change this big if nothing were really changing. Small p (below 0.05) = probably real.'],
   ['q-value (q)', 'A p-value made stricter because we tested many places at once. With 360 places, some would look "significant" by luck; q fixes that.'],
+  ['Mann-Kendall test', 'A simple, robust trend test: it compares every year with every later year and asks whether later ones are mostly higher (or lower). Recommended by the challenge.'],
+  ['Sen\'s slope', 'The typical change per year, using the middle (median) of all year-to-year slopes, so one extreme year can\'t pull it.'],
+  ['HAC trend test', 'A trend test that allows for the fact that one month is often similar to the next ("memory"), so it does not get over-confident. HAC = heteroskedasticity- and autocorrelation-consistent.'],
   ['How sure (%)', 'Bayesian probability that the trend really goes the way the data shows. 50% = a coin toss; above 99% = almost certain.'],
   ['Bayes factor', 'How many times more the data supports "changing" than "not changing". Above 3 = some evidence, above 20 = strong, below 1 = favours no change.'],
   ['95% range / credible range', 'Where the true value very probably lies. A narrow range = we know it well.'],
