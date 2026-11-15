@@ -1,0 +1,23 @@
+{
+  "name": "active-future-labs-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Earth System Trend Detective frontend: a CesiumJS globe host using God's Eye View's layer architecture.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.mjs",
+    "data": "python ../backend/export/export_frontend_data.py ${DB:-../backend/data/nasa_cache.sqlite3} public/data"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "cesium": "^1.124.0"
+  },
+  "devDependencies": {
+    "vite": "^6.4.1",
+    "vite-plugin-static-copy": "^3.1.0"
+  }
+}

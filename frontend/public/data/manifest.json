@@ -1,0 +1,105 @@
+{
+ "generated_at": "2026-11-15T11:52:32+00:00",
+ "source_database": "nasa_cache.sqlite3",
+ "period": {
+  "start": "2000-01",
+  "end": "2024-12"
+ },
+ "regions": 360,
+ "variables": [
+  {
+   "id": "T2M",
+   "label": "Air temperature",
+   "unit": "°C",
+   "family": "air",
+   "source": "NASA POWER (MERRA-2)",
+   "definition": "Temperature of the air 2 m above the ground.",
+   "decimals": 2
+  },
+  {
+   "id": "RH2M",
+   "label": "Humidity",
+   "unit": "%",
+   "family": "air",
+   "source": "NASA POWER (MERRA-2)",
+   "definition": "How close the air is to holding all the water vapour it can.",
+   "decimals": 1
+  },
+  {
+   "id": "aerosol",
+   "label": "Haze",
+   "unit": "AOD",
+   "family": "air",
+   "source": "MERRA-2 aerosol (M2TMNXAER)",
+   "definition": "How much dust, smoke, pollution and sea salt dims sunlight. 0 = perfectly clear.",
+   "decimals": 3
+  },
+  {
+   "id": "dust",
+   "label": "Desert dust",
+   "unit": "AOD",
+   "family": "air",
+   "source": "MERRA-2 aerosol (M2TMNXAER)",
+   "definition": "The part of the haze made of desert dust.",
+   "decimals": 3
+  },
+  {
+   "id": "PRECTOTCORR",
+   "label": "Rainfall (model)",
+   "unit": "mm/day",
+   "family": "water",
+   "source": "NASA POWER (MERRA-2)",
+   "definition": "Rain and snow, from the MERRA-2 model corrected with rain gauges.",
+   "decimals": 2
+  },
+  {
+   "id": "gpm_rain",
+   "label": "Rainfall (satellite)",
+   "unit": "mm/day",
+   "family": "water",
+   "source": "GPM IMERG V07",
+   "definition": "Rain measured by the Global Precipitation Measurement satellites.",
+   "decimals": 2
+  },
+  {
+   "id": "evaporation",
+   "label": "Evaporation",
+   "unit": "mm/day",
+   "family": "water",
+   "source": "GLDAS Noah 2.1",
+   "definition": "Water leaving the land and plants into the air.",
+   "decimals": 2
+  },
+  {
+   "id": "runoff",
+   "label": "Runoff",
+   "unit": "mm/day",
+   "family": "water",
+   "source": "GLDAS Noah 2.1",
+   "definition": "Rainwater flowing off the surface towards rivers.",
+   "decimals": 3
+  },
+  {
+   "id": "GWETTOP",
+   "label": "Topsoil wetness",
+   "unit": "0–1",
+   "family": "land",
+   "source": "NASA POWER (MERRA-2)",
+   "definition": "How wet the top layer of soil is: 0 = bone dry, 1 = soaked.",
+   "decimals": 3
+  },
+  {
+   "id": "soil_moisture",
+   "label": "Soil moisture",
+   "unit": "kg/m²",
+   "family": "land",
+   "source": "GLDAS Noah 2.1",
+   "definition": "Water held in the top 10 cm of soil (1 kg/m² ≈ 1 mm of water).",
+   "decimals": 2
+  }
+ ],
+ "derived_fields": {
+  "name": "Offline GeoNames reverse geocode of the box centre; \"Remote area\" when the nearest populated place is over 250 km away.",
+  "climate": "Simplified Koppen class from the box's own 2000-2024 monthly T2M and PRECTOTCORR."
+ }
+}

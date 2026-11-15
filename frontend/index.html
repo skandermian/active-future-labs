@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0d10" />
+    <title>EARTHWATCH · Earth change intelligence</title>
+    <meta name="description" content="A detector engine over 360 sites and four NASA systems, 2000–2024: what is changing, what is becoming erratic, where NASA records disagree, and where climates now resemble somewhere else." />
+  </head>
+  <body>
+    <div class="console" id="console" data-view="feed">
+      <header class="statusbar" id="statusbar"></header>
+
+      <aside class="col-feed" id="feed" aria-label="Detectors and signal feed"></aside>
+
+      <main class="theatre" aria-label="Globe">
+        <div id="globe" class="globe"></div>
+        <div class="theatre-hud">
+          <div class="hud-tag" id="hud-tag"></div>
+          <div class="hud-legend" id="hud-legend"></div>
+        </div>
+      </main>
+
+      <nav class="view-tabs" aria-label="Panels">
+        <button type="button" data-view="feed" aria-pressed="true">Signals</button>
+        <button type="button" data-view="dossier" aria-pressed="false">Dossier</button>
+      </nav>
+
+      <section class="col-dossier" id="dossier" aria-label="Site dossier"></section>
+
+      <div id="status" class="status" role="status" aria-live="polite">Loading NASA archive…</div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
