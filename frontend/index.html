@@ -15,6 +15,11 @@
 
       <main class="theatre" aria-label="Globe">
         <div id="globe" class="globe"></div>
+        <form class="place-search" id="place-search" role="search" autocomplete="off">
+          <input name="q" type="search" placeholder="Search any town or place, or click anywhere on the globe" aria-label="Search any town or place" />
+          <button type="submit">Find</button>
+          <p class="place-msg" id="place-msg" aria-live="polite"></p>
+        </form>
         <div class="theatre-hud">
           <div class="hud-tag" id="hud-tag"></div>
           <div class="hud-legend" id="hud-legend"></div>

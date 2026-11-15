@@ -8,7 +8,8 @@ import '@fontsource/ibm-plex-sans/600.css';
 import '@fontsource/ibm-plex-mono/400.css';
 import '@fontsource/ibm-plex-mono/500.css';
 import './styles/console.css';
-import { createViewer, flyToPlace, onPick } from './core/viewer.js';
+import { createPin, createViewer, flyToPlace, onPick } from './core/viewer.js';
+import { findPlace, nearestSite } from './tools/places.js';
 import { createStore } from './core/store.js';
 import { createContextStore } from './core/contextStore.js';
 import { createLayerManager } from './core/layerManager.js';
@@ -60,7 +61,9 @@ async function start() {
     selectedIndex: initialSite >= 0 ? initialSite : null,
     focusVar: variables[hash.get('var')] ? hash.get('var') : null,
     view: initialSite >= 0 ? 'dossier' : 'feed',
+    probe: null, // { label, lat, lon, km, how: 'search' | 'click' } when the user picked a spot rather than a site
   });
+  const pin = createPin(viewer);
 
   const leadVar = (i) => {
     for (const id of intel.sites[i].signals) {
@@ -70,10 +73,34 @@ async function start() {
     }
     return 'T2M';
   };
-  const selectSite = (i, focusVar) => {
-    store.set({ selectedIndex: i, focusVar: focusVar ?? leadVar(i), view: 'dossier' });
-    flyToPlace(viewer, regions[i].lon, regions[i].lat, { height: 6_000_000 });
+  const selectSite = (i, focusVar, probe = null) => {
+    store.set({ selectedIndex: i, focusVar: focusVar ?? leadVar(i), view: 'dossier', probe });
+    if (probe) pin.set(probe.lat, probe.lon, probe.label);
+    else pin.hide();
+    flyToPlace(viewer, probe ? probe.lon : regions[i].lon, probe ? probe.lat : regions[i].lat, { height: 6_000_000 });
   };
+  // Any spot on Earth -> the nearest analysed site, with an honest note of how far away it is.
+  const openSpot = (lat, lon, label, how) => {
+    const near = nearestSite(regions, lat, lon);
+    selectSite(near.index, undefined, { label, lat, lon, km: Math.round(near.km), how });
+  };
+
+  const searchForm = $('place-search');
+  const searchMsg = $('place-msg');
+  searchForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const q = searchForm.elements.q.value.trim();
+    if (!q) return;
+    searchMsg.textContent = 'Searching…';
+    const place = await findPlace(regions, q);
+    if (!place) {
+      searchMsg.textContent = `Couldn't find "${q}". Try a bigger town, a country, or coordinates like 53.5, -2.2.`;
+      return;
+    }
+    searchMsg.textContent = '';
+    if (place.site !== undefined && place.label === regions[place.site].name) selectSite(place.site);
+    else openSpot(place.lat, place.lon, place.label, 'search');
+  });
   if (store.get().selectedIndex !== null && !store.get().focusVar) store.set({ focusVar: leadVar(store.get().selectedIndex) });
 
   renderStatusbar($('statusbar'), core, 'nominal');
@@ -91,9 +118,10 @@ async function start() {
   for (const b of document.querySelectorAll('.view-tabs [data-view]'))
     b.addEventListener('click', () => store.set({ view: b.dataset.view }));
 
-  onPick(viewer, (entityId) => {
+  onPick(viewer, (entityId, where) => {
     const ctx = entityId ? contextStore.resolve(entityId) : null;
     if (ctx && (ctx.kind === 'site' || ctx.kind === 'region')) selectSite(ctx.key);
+    else if (where) openSpot(where.lat, where.lon, `${Math.abs(where.lat).toFixed(1)}°${where.lat >= 0 ? 'N' : 'S'} ${Math.abs(where.lon).toFixed(1)}°${where.lon >= 0 ? 'E' : 'W'}`, 'click');
   });
 
   async function render(changed) {
@@ -109,7 +137,7 @@ async function start() {
       renderHud(core, s);
 
       if (!changed || changed.some((k) => ['filter', 'query', 'selectedIndex'].includes(k))) feed.render();
-      if (!changed || changed.some((k) => ['selectedIndex', 'focusVar'].includes(k))) await dossier.render();
+      if (!changed || changed.some((k) => ['selectedIndex', 'focusVar', 'probe'].includes(k))) await dossier.render();
 
       const feedState = worstState(layers.stats().filter((l) => l.enabled).map((l) => l.state));
       status.hidden = feedState === 'nominal';

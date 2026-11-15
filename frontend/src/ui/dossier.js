@@ -4,6 +4,8 @@ import { colorForChange } from '../layers/colorScale.js';
 import { formatP, formatSigned } from './format.js';
 import { renderTrendChart } from './chart.js';
 import { esc, fmtInt } from './dom.js';
+import { briefingOutlookHtml, deepMethodsHtml, deepVarHtml, outlookHtml } from './deep.js';
+import { chartTakeaway, explain, glossaryHtml, guideHtml } from './explain.js';
 
 const GROUPS = [
   { system: 'MERRA-2', note: 'reanalysis model', vars: ['T2M', 'RH2M', 'PRECTOTCORR', 'GWETTOP'] },
@@ -47,7 +49,7 @@ export function createDossier({ root, core, source, store, onSelectSite }) {
     const variable = focusVar ?? 'T2M';
     const [monthly, annual] = await Promise.all([source.monthly(variable), source.annual(variable)]);
     if (mine !== token) return;
-    root.innerHTML = dossierHtml(core, selectedIndex, variable);
+    root.innerHTML = dossierHtml(core, selectedIndex, variable, store.get().probe);
     const rec = trendRecord(core, selectedIndex, variable);
     const accent = rec.available ? `rgb(${colorForChange(rec.slope, rec.scale, variable).join(' ')})` : '#e6e8eb';
     renderTrendChart(root.querySelector('[data-chart]'), {
@@ -70,12 +72,14 @@ function briefingHtml(core) {
   return `
     <header class="panel-head"><h2>Briefing</h2><span>2000–2024 archive</span></header>
     <div class="dossier-body">
+      ${guideHtml()}
       <p class="brief-lede">The engine scanned ${fmtInt(regions.length)} sites across four NASA systems and raised ${fmtInt(intel.signals.length)} signals. It looks past the average: for places getting more erratic, for NASA records that contradict each other, and for climates that now resemble somewhere else.</p>
       <dl class="brief-stats">
         ${['drift', 'erratic', 'conflict', 'migrate'].map((k) => `
           <div style="--c:${SIGNAL_TYPES[k].color}"><dt><span class="glyph">${SIGNAL_TYPES[k].glyph}</span>${SIGNAL_TYPES[k].label}</dt>
           <dd>${fmtInt(intel.totals[k])}</dd><p>${esc(SIGNAL_TYPES[k].question)}</p></div>`).join('')}
       </dl>
+      ${briefingOutlookHtml(core)}
       <h3 class="sub">Highest-priority sites</h3>
       <ol class="site-list">
         ${top.map((i) => `<li><button type="button" data-site="${i}">
@@ -90,6 +94,7 @@ function briefingHtml(core) {
         <li>${esc(d.erratic.caveat)}</li>
         <li>${esc(d.resilience.note)} (${d.resilience.raw_hits} raw hits in ${fmtInt(d.resilience.tests)} tests, about what chance alone gives.)</li>
       </ul>
+      ${glossaryHtml()}
     </div>`;
 }
 
@@ -100,7 +105,7 @@ function countsHtml(c) {
     .join('');
 }
 
-function dossierHtml(core, i, focusVar) {
+function dossierHtml(core, i, focusVar, probe = null) {
   const { intel, regions, variables } = core;
   const r = regions[i];
   const site = intel.sites[i];
@@ -155,6 +160,11 @@ function dossierHtml(core, i, focusVar) {
       <button type="button" class="icon-button" data-close aria-label="Close dossier"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
     </header>
     <div class="dossier-body">
+      ${probe ? `<div class="probe">
+        <p>You ${probe.how === 'click' ? 'clicked' : 'searched for'} <b>${esc(probe.label)}</b>. The nearest place we analysed is <b>${esc(r.name)}</b>,
+        ${probe.km < 5 ? 'right there' : `${fmtInt(probe.km)} km away`}, so the results below are for that 2°×2° area (about 200 km across).</p>
+        ${probe.km > 300 ? '<p class="probe-warn">That is quite far, so treat these results as a rough guide for your spot.</p>' : ''}
+      </div>` : ''}
       <div class="ident">
         <h3 class="site-title">${esc(r.name)}</h3>
         <p>${esc(r.country ?? '')} · ${esc(r.climate.label)} · ${coordText(r)}</p>
@@ -168,38 +178,51 @@ function dossierHtml(core, i, focusVar) {
 
       <section>
         <h4>Signals <span>${sigs.length}</span></h4>
+        ${explain('signals')}
         <ul class="site-signals">${signalRows}</ul>
       </section>
 
+      ${outlookHtml(core, i)}
+
       <section>
         <h4>Do the sources agree?</h4>
+        ${explain('sources')}
         <ul class="pairs">${pairs}</ul>
       </section>
 
       <section>
         <h4>Evidence matrix <span>tap a row to chart it</span></h4>
+        ${explain('matrix')}
         <table class="matrix">
-          <thead><tr><th scope="col">Record</th><th scope="col">Drift /dec</th><th scope="col">Swings /dec</th><th scope="col">Memory</th></tr></thead>
+          <thead><tr><th scope="col">Record</th><th scope="col">Average /dec</th><th scope="col">Swings /dec</th><th scope="col">Memory</th></tr></thead>
           ${matrix}
         </table>
-        <p class="caption">Bright = significant after correction across all sites. Drift: change in the average. Swings: change in the size of month-to-month departures. Memory: early-warning indicator (rising = slower recovery); none significant anywhere.</p>
+        <p class="caption">Bright = significant after correction across all sites. Average (drift): change in the normal level. Swings: change in the size of month-to-month departures. Memory: early-warning indicator (rising = slower recovery); none significant anywhere.</p>
       </section>
 
       <section>
         <h4>${esc(v.label)} <span>${esc(v.source)}</span></h4>
+        <p class="plain">${chartTakeaway(rec, focusVar)}</p>
         <div class="chart-slot" data-chart></div>
+        ${explain('chart')}
         <p class="caption">Monthly departures from this site's normal (line), yearly average (dots), trend with 95% range (fan) and ±1 s.d. swing band (shaded). Trend ${rec.available ? `${formatSigned(rec.slope, v.decimals)} ${esc(v.unit)} per decade, adjusted p ${formatP(rec.pAdjusted)}` : 'not fitted'}.</p>
       </section>
 
+      ${deepVarHtml(core, i, focusVar)}
+
       ${analogue ? `<section class="analogue">
         <h4>Climate match</h4>
+        ${explain('analogue')}
         <p>This site's 2020–24 climate (temperature, rain, humidity, topsoil wetness by month) is closest to <b>${esc(analogue.name)}</b>, ${esc(analogue.country ?? '')}, as it was in 2000–04.</p>
         <button type="button" class="jump" data-site="${site.analogue}">Open ${esc(analogue.name)}</button>
       </section>` : ''}
 
+      ${glossaryHtml()}
+
       <details class="provenance">
         <summary>Sources and methods</summary>
         ${Object.values(intel.detectors).filter((d) => d.method).map((d) => `<p><b>${esc(d.label)}.</b> ${esc(d.method)}</p>`).join('')}
+        ${deepMethodsHtml(core)}
         <p><b>Data.</b> ${GROUPS.map((g) => esc(g.system)).join(', ')}; monthly ${esc(core.manifest.period.start)} to ${esc(core.manifest.period.end)}, area-averaged over the box.</p>
       </details>
     </div>`;

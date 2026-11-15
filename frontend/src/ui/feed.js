@@ -1,5 +1,6 @@
 import { FILTER_ORDER, GRADE_TEXT, SIGNAL_TYPES, filterSignals } from '../intel/signals.js';
 import { esc, fmtInt } from './dom.js';
+import { explain } from './explain.js';
 
 const PAGE = 100;
 
@@ -20,6 +21,7 @@ export function createFeed({ root, core, store, onOpen }) {
         <li><span class="glyph" aria-hidden="true">◌</span><b>Early warning</b><span>${det.resilience.count} of ${fmtInt(det.resilience.tests)} · watched, nothing detected</span></li>
         <li><span class="glyph" aria-hidden="true">◌</span><b>Change types</b><span>no natural groups found</span></li>
       </ul>
+      <div class="tally-explain">${explain('detectors')}</div>
     </section>
     <section class="feed" aria-label="Signal feed">
       <header class="panel-head">

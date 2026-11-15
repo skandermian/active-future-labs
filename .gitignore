@@ -226,8 +226,3 @@ frontend/dist/
 *.sqlite3
 *.sqlite3-shm
 *.sqlite3-wal
-
-get_all_data.py
-get_global_data.py
-*_progress.json
-backend/data/global_cache/

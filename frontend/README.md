@@ -11,6 +11,35 @@ Not a map of trends. A detector engine scans 360 sites × 10 NASA records (four 
 | ◌ Early warning | Is it losing the ability to bounce back? | 0 of 1,789: raw hits at the chance rate. Shown as "watched, nothing detected" |
 | ◌ Change types | Do places fall into natural groups? | No (silhouette ≤ 0.22). Not shown as a finding |
 
+## Disaster outlook and deep statistics
+
+`backend/intel/deep_stats.py` adds methods no other team in this challenge uses, computed from the same series and written to `public/data/deep.json`:
+
+| In the dossier | Method |
+|---|---|
+| Disaster outlook | Heatwave, dry-soil, very-wet and fire-weather months (2012–24 vs 2000–11) by quasi-binomial GLM, Benjamini-Hochberg across all sites; chance a month is extreme now |
+| Dry spells | Two-state Markov chain on wet/dry months, likelihood-ratio test |
+| Desertification | UN aridity index (rain / Thornthwaite potential evaporation), class, year it would cross into a drier class |
+| Stability | 0–100 score vs all 360 sites with a block-bootstrap 95% range and rank |
+| How sure | Bayesian trend: probability the direction is real, Bayes factor |
+| Extremes | Quantile regression (10th / 50th / 90th percentile months), autocorrelation-adjusted |
+| Normal range | Time of emergence (signal-to-noise > 1) |
+| Not proven yet | Years of data until a non-significant trend would become significant |
+
+Simulated on random series, the hazard and dry-spell tests raise false alarms 5–6% of the time and the quantile test 1.5–3.5%.
+
+```bash
+python backend/intel/deep_stats.py frontend/public/data      # ~1-2 min, writes deep.json
+```
+
+## Plain-English layer
+
+Every section has a **What does this mean?** drop-down, each result opens with an **In plain words** sentence, the briefing starts with a 1-minute **how to read this** guide, and a glossary explains every technical term (`src/ui/explain.js`).
+
+## Search any place, or click anywhere
+
+Type a town, country or coordinates (e.g. `53.5, -2.2`) in the box over the globe, or click any spot on Earth. The place is found with OpenStreetMap (free, no key; falls back to the site list offline), a pin marks it, and the dossier opens for the nearest of the 360 analysed sites with a note saying how far away it is (`src/tools/places.js`).
+
 ## Run it
 
 ```bash

@@ -70,14 +70,43 @@ export function flyToPlace(viewer, lon, lat, { height = 7_500_000, duration = 1.
   viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(lon, lat, height), duration });
 }
 
-/** Call onPick(entityId|null) for taps/clicks on the globe. */
+/** Call onPick(entityId|null, {lat, lon}|null) for taps/clicks on the globe. */
 export function onPick(viewer, onPickFn) {
   const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
   handler.setInputAction((movement) => {
     const picked = viewer.scene.pick(movement.position);
     // Entities expose id.id; primitives (points, billboards) expose the id we set.
     const id = typeof picked?.id === 'string' ? picked.id : picked?.id?.id;
-    onPickFn(id ?? null);
+    // Where on Earth was clicked (null if the click missed the globe).
+    const cart = viewer.camera.pickEllipsoid(movement.position, viewer.scene.globe.ellipsoid);
+    const geo = cart ? Cesium.Cartographic.fromCartesian(cart) : null;
+    onPickFn(id ?? null, geo ? { lat: Cesium.Math.toDegrees(geo.latitude), lon: Cesium.Math.toDegrees(geo.longitude) } : null);
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   return () => handler.destroy();
+}
+
+/** A pin for a searched or clicked spot. Returns set(lat, lon, label) / hide(). */
+export function createPin(viewer) {
+  const pin = viewer.entities.add({
+    show: false,
+    position: Cesium.Cartesian3.fromDegrees(0, 0),
+    point: { pixelSize: 11, color: Cesium.Color.WHITE, outlineColor: Cesium.Color.fromCssColorString('#e34948'), outlineWidth: 3 },
+    label: {
+      text: '', font: '12px "IBM Plex Mono", monospace', fillColor: Cesium.Color.WHITE, showBackground: true,
+      backgroundColor: Cesium.Color.fromCssColorString('#0b0d10').withAlpha(0.85), pixelOffset: new Cesium.Cartesian2(0, -20),
+      verticalOrigin: Cesium.VerticalOrigin.BOTTOM, disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+  });
+  return {
+    set(lat, lon, label) {
+      pin.position = Cesium.Cartesian3.fromDegrees(lon, lat, 3000);
+      pin.label.text = label;
+      pin.show = true;
+      viewer.scene.requestRender();
+    },
+    hide() {
+      pin.show = false;
+      viewer.scene.requestRender();
+    },
+  };
 }

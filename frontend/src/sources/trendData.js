@@ -18,11 +18,13 @@ export function createTrendDataSource({ baseUrl, fetchJson = defaultFetchJson })
         fetchJson(url('regions.json')),
         fetchJson(url('trends.json')),
         fetchJson(url('intel.json')),
-      ]).then(([manifest, regions, trends, intel]) => ({
+        fetchJson(url('deep.json')).catch(() => null), // optional: deep statistics + disaster outlook
+      ]).then(([manifest, regions, trends, intel, deep]) => ({
         manifest,
         regions,
         trends,
         intel,
+        deep,
         variables: Object.fromEntries(manifest.variables.map((v) => [v.id, v])),
       }));
     }
